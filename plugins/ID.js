@@ -6,50 +6,55 @@ const handler = async (m, { conn }) => {
     let q = m.quoted ? m.quoted : m
     let mime = (q.msg || q).mimetype || q.mediaType || ""
 
-    if (!mime) return m.reply(`❀ Por favor, envía o responde a una imagen con el comando.`)
-    if (!/image\/(jpe?g|png)/.test(mime)) return m.reply(`✧ El formato (${mime}) no es compatible, usa JPG o PNG.`)
+    if (!mime) {
+      return m.reply(`❀ Por favor, envía o responde a una imagen con el comando.`)
+    }
 
-    conn.reply(m.chat, '*🚀 Mejorando imagen...*', m)
+    if (!/image\/(jpe?g|png)/.test(mime)) {
+      return m.reply(`✧ El formato del archivo (${mime}) no es compatible, usa JPG o PNG.`)
+    }
 
-    const buffer = await q.download()
-    const enhancedBuffer = await remini(buffer)
+    conn.reply(m.chat, '*🚀 P R O C E S A N D O ...*', m)
 
-    await conn.sendFile(m.chat, enhancedBuffer, 'remini.jpg', '✨ Imagen mejorada con IA', m)
+    const imgBuffer = await q.download()
+    const enhancedBuffer = await enhanceWithVyro(imgBuffer)
 
-  } catch (e) {
-    console.error(e)
-    conn.reply(m.chat, `⚠️ Ocurrió un error: ${e.message}`, m)
+    await conn.sendFile(m.chat, enhancedBuffer, 'hd.jpg', '✨ Imagen mejorada con IA', m)
+
+  } catch (error) {
+    console.error(error)
+    return conn.reply(m.chat, `⚠︎ Ocurrió un error: ${error.message}`, m)
   }
 }
 
-handler.help = ['reminis', 'hd', 'enhance']
+handler.help = ['remini']
 handler.tags = ['tools']
 handler.command = ['reminis', 'hd', 'enhance']
-handler.group = false // cámbialo a true si solo quieres en grupos
+handler.group = false
 
 export default handler
 
-async function remini(imageBuffer, operation = "enhance") {
-  const validOps = ["enhance", "recolor", "dehaze"]
-  operation = validOps.includes(operation) ? operation : "enhance"
+async function enhanceWithVyro(buffer, operation = 'enhance') {
+  const validOperations = ['enhance', 'recolor', 'dehaze']
+  operation = validOperations.includes(operation) ? operation : 'enhance'
 
   const form = new FormData()
-  form.append("image", imageBuffer, {
-    filename: "image.jpg",
-    contentType: "image/jpeg"
+  form.append('image', buffer, {
+    filename: 'image.jpg',
+    contentType: 'image/jpeg'
   })
-  form.append("model_version", "1")
+  form.append('model_version', '1')
 
   const res = await fetch(`https://inferenceengine.vyro.ai/${operation}.vyro`, {
-    method: "POST",
+    method: 'POST',
     body: form,
     headers: {
       ...form.getHeaders(),
-      "User-Agent": "okhttp/4.9.3",
-      "Accept-Encoding": "gzip"
+      'User-Agent': 'okhttp/4.9.3',
+      'Accept-Encoding': 'gzip'
     }
   })
 
-  if (!res.ok) throw new Error("No se pudo procesar la imagen.")
+  if (!res.ok) throw new Error('No se pudo procesar la imagen. El servidor falló.')
   return await res.buffer()
 }
