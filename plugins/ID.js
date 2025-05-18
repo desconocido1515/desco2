@@ -1,75 +1,55 @@
-const fs = require('fs');
-const path = require('path');
-const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
-const FormData = require('form-data');
-const axios = require('axios');
+import FormData from "form-data"
+import fetch from "node-fetch"
 
-const remini = async (imageBuffer, operation = "enhance") => {
-    const validOperations = ["enhance", "recolor", "dehaze"];
-    operation = validOperations.includes(operation) ? operation : "enhance";
+const handler = async (m, { conn }) => {
+  try {
+    let q = m.quoted ? m.quoted : m
+    let mime = (q.msg || q).mimetype || q.mediaType || ""
 
-    const form = new FormData();
-    form.append('image', imageBuffer, {
-        filename: 'image.jpg',
-        contentType: 'image/jpeg'
-    });
-    form.append('model_version', '1');
+    if (!mime) return m.reply(`❀ Por favor, envía o responde a una imagen con el comando.`)
+    if (!/image\/(jpe?g|png)/.test(mime)) return m.reply(`✧ El formato (${mime}) no es compatible, usa JPG o PNG.`)
 
-    try {
-        const { data } = await axios({
-            method: 'post',
-            url: `https://inferenceengine.vyro.ai/${operation}.vyro`,
-            data: form,
-            headers: {
-                ...form.getHeaders(),
-                'User-Agent': 'okhttp/4.9.3',
-                'Accept-Encoding': 'gzip'
-            },
-            responseType: 'arraybuffer',
-            timeout: 30000
-        });
+    conn.reply(m.chat, '*🚀 Mejorando imagen...*', m)
 
-        return data;
-    } catch (error) {
-        console.error('API Remini Error:', error.message);
-        throw new Error('No se pudo procesar la imagen.');
+    const buffer = await q.download()
+    const enhancedBuffer = await remini(buffer)
+
+    await conn.sendFile(m.chat, enhancedBuffer, 'remini.jpg', '✨ Imagen mejorada con IA', m)
+
+  } catch (e) {
+    console.error(e)
+    conn.reply(m.chat, `⚠️ Ocurrió un error: ${e.message}`, m)
+  }
+}
+
+handler.help = ['remini', 'hd', 'enhance']
+handler.tags = ['tools']
+handler.command = ['remini', 'hd', 'enhance']
+handler.group = false // cámbialo a true si solo quieres en grupos
+
+export default handler
+
+async function remini(imageBuffer, operation = "enhance") {
+  const validOps = ["enhance", "recolor", "dehaze"]
+  operation = validOps.includes(operation) ? operation : "enhance"
+
+  const form = new FormData()
+  form.append("image", imageBuffer, {
+    filename: "image.jpg",
+    contentType: "image/jpeg"
+  })
+  form.append("model_version", "1")
+
+  const res = await fetch(`https://inferenceengine.vyro.ai/${operation}.vyro`, {
+    method: "POST",
+    body: form,
+    headers: {
+      ...form.getHeaders(),
+      "User-Agent": "okhttp/4.9.3",
+      "Accept-Encoding": "gzip"
     }
-};
+  })
 
-let handler = async (m, { conn }) => {
-    try {
-        let q = m.quoted ? m.quoted : m;
-        let mime = (q.msg || q).mimetype || '';
-
-        if (!/image\/(jpe?g|png)/.test(mime))
-            return m.reply('*Responde a una imagen JPG o PNG con el comando*');
-
-        await m.react('🔄');
-
-        const imgStream = await downloadContentFromMessage(q, 'image');
-        let buffer = Buffer.alloc(0);
-        for await (const chunk of imgStream) buffer = Buffer.concat([buffer, chunk]);
-
-        if (!buffer.length) throw 'Imagen vacía o no descargada.';
-
-        const result = await remini(buffer);
-
-        await conn.sendMessage(m.chat, {
-            image: result,
-            caption: '🖼️ *Imagen mejorada con tecnología HD*\n\n💡 Usa fotos con buena luz para mejores resultados\n\n🤖 *Azura Ultra 2.0*'
-        }, { quoted: m });
-
-        await m.react('✅');
-
-    } catch (err) {
-        console.error(err);
-        await m.react('❌');
-        m.reply(typeof err === 'string' ? err : '*Ocurrió un error al procesar la imagen.*');
-    }
-};
-
-handler.command = /^(reminis|hd|enhance)$/i;
-handler.help = ['reminis'].map(v => v + ' (responde a imagen)');
-handler.tags = ['ai'];
-
-module.exports = handler;
+  if (!res.ok) throw new Error("No se pudo procesar la imagen.")
+  return await res.buffer()
+}
