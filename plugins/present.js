@@ -2,12 +2,22 @@ let handler = m => m
 
 handler.before = async function (m, { conn, groupMetadata }) {
   if (!m.messageStubType || !m.isGroup) return
-  if (m.messageStubType !== 20) return // 20 = Creación del grupo o bot agregado
 
-  let subject = groupMetadata?.subject || "este grupo"
-  let botName = conn.user?.name || "el bot"
+  const botJid = conn.user.jid
+  const botId = botJid.split('@')[0]
+  const participants = m.messageStubParameters || []
 
-  let welcomeBot = `🥇 ¡𝗛𝗢𝗟𝗔 𝗚𝗥𝗨𝗣𝗢!🥇  
+  const fueAgregadoElBot = (
+    (m.messageStubType === 20) ||
+    (m.messageStubType === 27 && participants.includes(botJid))
+  )
+
+  if (!fueAgregadoElBot) return
+
+  let botName = conn.user.name
+  let audioPath = './Audios/presentacion1.mp3'
+
+  let welcomeBotText = `🥇 ¡𝗛𝗢𝗟𝗔 𝗚𝗥𝗨𝗣𝗢!🥇  
 ¡Soy ${botName}, su nuevo asistente digital!  
 ━━━━━━━━━━━━━━━━━━━  
 ⚡ *Mis funciones :*  
@@ -27,8 +37,16 @@ handler.before = async function (m, { conn, groupMetadata }) {
 ━━━━━━━━━━━━━━━━━━━  
 ©EliteBotGlobal 2023`
 
+  // Enviar mensaje de texto
   await conn.sendMessage(m.chat, {
-    text: welcomeBot
+    text: welcomeBotText
+  }, { quoted: m })
+
+  // Enviar audio de presentación
+  await conn.sendMessage(m.chat, {
+    audio: { url: audioPath },
+    mimetype: 'audio/mpeg',
+    ptt: true
   }, { quoted: m })
 }
 
