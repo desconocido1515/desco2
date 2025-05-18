@@ -22,9 +22,9 @@ const handler = async (m, { conn }) => {
   }
 }
 
-handler.help = ['remini', 'hd', 'enhance']
+handler.help = ['reminis', 'hd', 'enhance']
 handler.tags = ['tools']
-handler.command = ['remini', 'hd', 'enhance']
+handler.command = ['reminis', 'hd', 'enhance']
 handler.group = false // cámbialo a true si solo quieres en grupos
 
 export default handler
