@@ -1,4 +1,4 @@
-let handler = m => m
+/*let handler = m => m
 
 handler.before = async function (m, { conn, groupMetadata }) {
   if (!m.messageStubType || !m.isGroup) return
@@ -20,3 +20,4 @@ handler.before = async function (m, { conn, groupMetadata }) {
 }
 
 export default handler
+*/
