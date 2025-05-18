@@ -15,14 +15,19 @@ const handler = async (m, { conn }) => {
     }
 
     // Reaccionar con un emoji al mensaje que contiene la imagen
-    await conn.react(m.chat, m.key, '✅')
+    await conn.sendMessage(m.chat, {
+      react: {
+        text: '🖼️',
+        key: m.key
+      }
+    })
 
-    conn.reply(m.chat, '*🚀 P R O C E S A N D O ...*', m)
+    await conn.reply(m.chat, '*🚀 P R O C E S A N D O ...*', m)
 
     const imgBuffer = await q.download()
     const enhancedBuffer = await enhanceWithVyro(imgBuffer)
 
-    await conn.sendFile(m.chat, enhancedBuffer, 'hd.jpg', '✨ Imagen mejorada con tecnología Elite Bot. 🤖', m)
+    await conn.sendFile(m.chat, enhancedBuffer, 'hd.jpg', 'Imagen mejorada con tecnología Elite Bot. 🤖', m)
 
   } catch (error) {
     console.error(error)
@@ -32,7 +37,7 @@ const handler = async (m, { conn }) => {
 
 handler.help = ['reminis']
 handler.tags = ['tools']
-handler.command = ['reminis', 'hd', 'enhance', '🖼️'] // comando emoji incluido
+handler.command = ['reminis', 'hd', 'enhance', '🖼️'] // incluye el emoji como comando
 handler.group = false
 
 export default handler
