@@ -1,22 +1,35 @@
+import fs from 'fs';
+import path from 'path';
+
 const handler = async (m, { conn }) => {
+  // Solo permitir en chats privados
+  if (m.isGroup) return;
+
+  const sessionId = conn.user?.id?.split(':')[0]; // obtiene el ID del subbot
+  if (!sessionId) return m.reply('❌ No se pudo identificar la sesión.');
+
+  const sessionPath = path.join('./GataJadiSession', sessionId); // Ruta de la sesión
+
   try {
-    const botJid = conn.user?.id || 'JID no disponible';
-    const botNumber = botJid.split('@')[0];
-    const botName = conn.user?.name || 'Nombre no disponible';
+    await m.reply('🧹 Cerrando sesión y eliminando datos...');
+    await conn.ws.close(); // Cierra conexión WebSocket
 
-    let info = `🤖 *Información del Bot:*\n\n`;
-    info += `🔹 *JID:* ${botJid}\n`;
-    info += `🔹 *@wa:* wa.me/${botNumber}\n`;
-    info += `🔹 *Nombre:* ${botName}`;
+    // Eliminar carpeta de la sesión
+    if (fs.existsSync(sessionPath)) {
+      fs.rmSync(sessionPath, { recursive: true, force: true });
+    }
 
-    m.reply(info);
+    process.send('reset'); // Reinicia el proceso del subbot (si aplica)
   } catch (e) {
-    m.reply('❌ Error al obtener la información del bot.');
+    console.error(e);
+    await m.reply('❌ Error al cerrar la sesión.');
   }
 };
 
-handler.command = /^infobot$/i;
-handler.help = ['infobot'];
-handler.tags = ['info'];
+handler.command = /^cerrar$/i;
+handler.private = true; // Solo en chats privados
+handler.help = ['cerrar'];
+handler.tags = ['jadibot'];
+handler.register = true; // Evita que otros lo usen sin ser subbot
 
 export default handler;
