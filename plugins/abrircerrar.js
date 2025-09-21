@@ -38,8 +38,16 @@ var handler = async (m, {conn, args, usedPrefix, command}) => {
     return conn.reply(m.chat, `*Comandos válidos:*\n\nAbrir:\n○ .grupoabrir\n○ .abrir grupo\n\nCerrar:\n○ .grupocerrar\n○ .cerrar grupo`, m);
   }
 
+  // Actualizamos la configuración del grupo
   await conn.groupSettingUpdate(m.chat, action);
   await m.react('✅');
+
+  // Enviamos mensaje según la acción
+  if (action === 'announcement') {
+    await conn.sendMessage(m.chat, 'ORDENES RECIBIDAS: GRUPO CERRADO', { quoted: m });
+  } else if (action === 'not_announcement') {
+    await conn.sendMessage(m.chat, 'ORDENES RECIBIDAS: GRUPO ABIERTO', { quoted: m });
+  }
 }
 
 handler.help = ['grupo [abrir/cerrar]'];
