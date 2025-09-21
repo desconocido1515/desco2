@@ -1,93 +1,111 @@
-import yts from 'yt-search';
-import ytdl from 'ytdl-core';
-import axios from 'axios';
-import fs from 'fs';
-import path from 'path';
+import axios from 'axios'
 
-// Capturar errores globales para que el bot no se caiga
-process.on('unhandledRejection', (reason, promise) => {
-  console.warn('⚠️ Unhandled Rejection capturado:', reason);
-});
+const SEARCH_API = 'https://delirius-apiofc.vercel.app/search/spotify?q='
+const DL_API = 'https://delirius-apiofc.vercel.app/download/spotifydl?url='
 
-// Función para obtener audio
-const getAudioUrl = async (videoUrl) => {
-  try {
-    // Intentar ytdl-core
-    const tempFile = path.join('/tmp', `${Date.now()}.mp3`);
-    const stream = ytdl(videoUrl, { filter: 'audioonly', quality: 'highestaudio' });
-    await new Promise((resolve, reject) => {
-      const writeStream = fs.createWriteStream(tempFile);
-      stream.pipe(writeStream);
-      writeStream.on('finish', resolve);
-      writeStream.on('error', reject);
-    });
-    return { audioUrl: tempFile, api: 'ytdl-core' };
-  } catch (err) {
-    console.warn(`⚠️ ytdl-core falló: ${err.message}, usando Delirius API`);
-    // Respaldo con Delirius API
-    const apiUrl = `https://delirius-apiofc.vercel.app/download/spotifydl?url=${encodeURIComponent(videoUrl)}`;
-    const { data } = await axios.get(apiUrl, { timeout: 15000 });
-    if (!data?.url) throw new Error('Delirius API falló');
-    return { audioUrl: data.url, api: 'Delirius API' };
-  }
-};
-
-// Handler principal
-const handler = async (m, { conn, text, usedPrefix, command }) => {
-  if (!text || !text.trim()) {
-    throw `⭐ Envía el nombre de la canción\nEj: ${usedPrefix + command} Bad Bunny - Monaco`;
+let handler = async (m, {conn, text, usedPrefix, command}) => {
+  if (!text) {
+    throw (
+      `${lenguajeGB.smsMalused2?.() || 'Uso:'} ⊱ *${usedPrefix + command}* <texto o url>\n` +
+      `Ejemplos:\n` +
+      `• *${usedPrefix + command}* TWICE TT\n` +
+      `• *${usedPrefix + command}* https://open.spotify.com/track/60jFaQV7Z4boGC4ob5B5c6`
+    )
   }
 
   try {
-    await conn.sendMessage(m.chat, { react: { text: "🕒", key: m.key } });
+    m.react?.('⌛️')
 
-    // Buscar video en YouTube
-    const searchResults = await yts({ query: text.trim(), hl: 'es', gl: 'ES' });
-    const video = searchResults.videos[0];
-    if (!video) throw new Error("No se encontró ningún video");
-    if (video.seconds > 600) throw "❌ El audio es muy largo (máx 10 minutos)";
+    const isSpotifyUrl = /https?:\/\/open\.spotify\.com\/(track|album|playlist|episode)\/[A-Za-z0-9]+/i.test(text)
 
-    // Obtener audio
-    const { audioUrl, api } = await getAudioUrl(video.url);
-    console.log(`Audio obtenido usando: ${api}`);
+    let trackUrl = text.trim()
+    let picked = null
 
-    // Enviar info del video
-    await conn.sendMessage(m.chat, {
-      text: `🪼 *Título:* ${video.title}\n🪩 *Canal:* ${video.author.name}\n⏳ *Duración:* ${video.timestamp}\n🔗 *Enlace:* ${video.url}`,
-      contextInfo: {
-        externalAdReply: {
-          title: video.title.slice(0, 60),
-          body: video.author.name,
-          thumbnailUrl: video.thumbnail,
-          mediaType: 1,
-          renderLargerThumbnail: true,
-          showAdAttribution: true,
-          sourceUrl: video.url
+    if (!isSpotifyUrl) {
+      const sURL = `${SEARCH_API}${encodeURIComponent(text.trim())}`
+      const {data: sRes} = await axios.get(sURL, {timeout: 25_000})
+
+      if (!sRes?.status || !Array.isArray(sRes?.data) || sRes.data.length === 0) throw new Error('No se encontraron resultados para tu búsqueda.')
+
+      picked = sRes.data[0]
+      trackUrl = picked.url
+    }
+
+    const dURL = `${DL_API}${encodeURIComponent(trackUrl)}`
+    const {data: dRes} = await axios.get(dURL, {timeout: 25_000})
+
+    if (!dRes?.status || !dRes?.data?.url) {
+      throw new Error('No se pudo obtener el enlace de descarga.')
+    }
+
+    const {
+      title = picked?.title || 'Desconocido',
+      author = picked?.artist || 'Desconocido',
+      image = picked?.image || '',
+      duration = 0,
+      url: download
+    } = dRes.data || {}
+
+    const toMMSS = (ms) => {
+      const totalSec = Math.floor((+ms || 0) / 1000)
+      const mm = String(Math.floor(totalSec / 60)).padStart(2, '0')
+      const ss = String(totalSec % 60).padStart(2, '0')
+      return `${mm}:${ss}`
+    }
+    const mmss = duration && Number.isFinite(+duration) ? toMMSS(duration) : picked?.duration || '—:—'
+
+    const cover = image || picked?.image || ''
+
+    const info = `🪼 *Título:*
+${title}
+🪩 *Artista:*
+${author}
+⏳ *Duración:*
+${mmss}
+🔗 *Enlace:*
+${trackUrl}
+
+${wm}`
+
+    await conn.sendMessage(
+      m.chat,
+      {
+        text: info,
+        contextInfo: {
+          forwardingScore: 9999999,
+          isForwarded: true,
+          externalAdReply: {
+            showAdAttribution: true,
+            containsAutoReply: true,
+            renderLargerThumbnail: true,
+            title: 'Spotify Music',
+            mediaType: 1,
+            thumbnailUrl: cover,
+            mediaUrl: download,
+            sourceUrl: download
+          }
         }
-      }
-    }, { quoted: m });
+      },
+      {quoted: m}
+    )
 
-    // Enviar audio
-    const audioMessage = fs.existsSync(audioUrl)
-      ? { audio: { url: audioUrl }, mimetype: 'audio/mpeg', fileName: `${video.title.slice(0,30)}.mp3`, ptt: false }
-      : { audio: { url: audioUrl }, mimetype: 'audio/mpeg', fileName: `${video.title.slice(0,30)}.mp3`, ptt: false };
+    await conn.sendMessage(
+      m.chat,
+      {
+        audio: {url: download},
+        fileName: `${title}.mp3`,
+        mimetype: 'audio/mpeg'
+      },
+      {quoted: m}
+    )
 
-    await conn.sendMessage(m.chat, audioMessage, { quoted: m });
-
-    // Eliminar archivo temporal si existe
-    if (fs.existsSync(audioUrl) && api === 'ytdl-core') fs.unlink(audioUrl, () => {});
-
-    await conn.sendMessage(m.chat, { react: { text: "✅", key: m.key } });
-
-  } catch (error) {
-    console.error("Error handler música:", error?.message || error);
-    await conn.sendMessage(m.chat, { react: { text: "❌", key: m.key } });
-    const errorMsg = typeof error === 'string' ? error :
-      `❌ *Error:* ${error.message || 'Ocurrió un problema'}\n🔸 Intenta con otra canción o más tarde`;
-    await conn.sendMessage(m.chat, { text: errorMsg }, { quoted: m });
+    m.react?.('✅')
+  } catch (e) {
+    console.log('❌ Error spotify-combinado:', e?.message || e)
+    m.react?.('❌')
+    m.reply(`No pude descargar esa pedorra musica jajajaj lo siento bot `)
   }
-};
+}
 
-handler.command = ['play', 'playaudio', 'ytmusic', 'youtube'];
-handler.exp = 0;
-export default handler;
+handler.command = ['play', 'music']
+export default handler
