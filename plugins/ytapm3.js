@@ -1,101 +1,112 @@
 
-import fetch from 'node-fetch'
-import yts from 'yt-search'
-import {createRequire} from 'module'
-const require = createRequire(import.meta.url)
-const {ytmp3} = require('@hiudyy/ytdl') //
+import axios from 'axios'
 
-const LimitAud = 700 * 1024 * 1024 // 700MB
+const SEARCH_API = 'https://delirius-apiofc.vercel.app/search/spotify?q='
+const DL_API = 'https://delirius-apiofc.vercel.app/download/spotifydl?url='
 
-let handler = async (m, {text, conn, args, usedPrefix, command}) => {
-  if (!args[0]) {
-    return conn.reply(m.chat, `${lenguajeGB['smsAvisoMG']()}${mid.smsMalused7}\n*${usedPrefix + command} https://youtu.be/c5gJRzCi0f0*`, fkontak, m)
+let handler = async (m, {conn, text, usedPrefix, command}) => {
+  if (!text) {
+    throw (
+      `${lenguajeGB.smsMalused2?.() || 'Uso:'} ⊱ *${usedPrefix + command}* <texto o url>\n` +
+      `Ejemplos:\n` +
+      `• *${usedPrefix + command}* TWICE TT\n` +
+      `• *${usedPrefix + command}* https://open.spotify.com/track/60jFaQV7Z4boGC4ob5B5c6`
+    )
   }
 
-  const yt_play = await search(args.join(' '))
-  let youtubeLink = ''
-  if (args[0].includes('you')) {
-    youtubeLink = args[0]
-  } else {
-    const index = parseInt(args[0]) - 1
-    if (index >= 0) {
-      if (Array.isArray(global.videoList) && global.videoList.length > 0) {
-        const matchingItem = global.videoList.find((item) => item.from === m.sender)
-        if (matchingItem) {
-          if (index < matchingItem.urls.length) youtubeLink = matchingItem.urls[index]
-          else throw `${lenguajeGB['smsAvisoFG']()}${mid.smsYT} ${matchingItem.urls.length}*`
-        } else {
-          throw `${lenguajeGB['smsAvisoMG']()} ${mid.smsY2(usedPrefix, command)} ${usedPrefix}playlist <texto>*`
+  try {
+    m.react?.('⌛️')
+
+    const isSpotifyUrl = /https?:\/\/open\.spotify\.com\/(track|album|playlist|episode)\/[A-Za-z0-9]+/i.test(text)
+
+    let trackUrl = text.trim()
+    let picked = null
+
+    if (!isSpotifyUrl) {
+      const sURL = `${SEARCH_API}${encodeURIComponent(text.trim())}`
+      const {data: sRes} = await axios.get(sURL, {timeout: 25_000})
+
+      if (!sRes?.status || !Array.isArray(sRes?.data) || sRes.data.length === 0) throw new Error('No se encontraron resultados para tu búsqueda.')
+
+      picked = sRes.data[0]
+      trackUrl = picked.url
+    }
+
+    const dURL = `${DL_API}${encodeURIComponent(trackUrl)}`
+    const {data: dRes} = await axios.get(dURL, {timeout: 25_000})
+
+    if (!dRes?.status || !dRes?.data?.url) {
+      throw new Error('No se pudo obtener el enlace de descarga.')
+    }
+
+    const {
+      title = picked?.title || 'Desconocido',
+      author = picked?.artist || 'Desconocido',
+      image = picked?.image || '',
+      duration = 0,
+      url: download
+    } = dRes.data || {}
+
+    const toMMSS = (ms) => {
+      const totalSec = Math.floor((+ms || 0) / 1000)
+      const mm = String(Math.floor(totalSec / 60)).padStart(2, '0')
+      const ss = String(totalSec % 60).padStart(2, '0')
+      return `${mm}:${ss}`
+    }
+    const mmss = duration && Number.isFinite(+duration) ? toMMSS(duration) : picked?.duration || '—:—'
+
+    const cover = image || picked?.image || ''
+
+    const info = `🪼 *Título:*
+${title}
+🪩 *Artista:*
+${author}
+⏳ *Duración:*
+${mmss}
+🔗 *Enlace:*
+${trackUrl}
+
+${wm}`
+
+    await conn.sendMessage(
+      m.chat,
+      {
+        text: info,
+        contextInfo: {
+          forwardingScore: 9999999,
+          isForwarded: true,
+          externalAdReply: {
+            showAdAttribution: true,
+            containsAutoReply: true,
+            renderLargerThumbnail: true,
+            title: 'Spotify Music',
+            mediaType: 1,
+            thumbnailUrl: cover,
+            mediaUrl: download,
+            sourceUrl: download
+          }
         }
-      } else {
-        throw `${lenguajeGB['smsAvisoMG']()}${mid.smsY2(usedPrefix, command)} ${usedPrefix}playlist <texto>*`
-      }
-    } else {
-      throw `${lenguajeGB['smsAvisoMG']()}${mid.smsY2(usedPrefix, command)} ${usedPrefix}playlist <texto>*`
-    }
-  }
+      },
+      {quoted: m}
+    )
 
-  await conn.reply(m.chat, lenguajeGB['smsAvisoEG']() + mid.smsAud, fkontak, m)
+    await conn.sendMessage(
+      m.chat,
+      {
+        audio: {url: download},
+        fileName: `${title}.mp3`,
+        mimetype: 'audio/mpeg'
+      },
+      {quoted: m}
+    )
 
-  const [_, qualityArg = '320'] = (text || '').split(' ')
-  const validQualities = ['64', '96', '128', '192', '256', '320']
-  const selectedQuality = validQualities.includes(qualityArg) ? qualityArg : '320'
-
-  try {
-    const target = youtubeLink || yt_play?.[0]?.url
-    if (!target) throw new Error('No se encontró URL válida de YouTube.')
-
-    const result = await ytmp3(target)
-
-    let audioData = result
-    let isDirect = true
-
-    let fileSize = 0
-    if (typeof audioData === 'string') {
-      fileSize = await getFileSize(audioData)
-      isDirect = false
-    }
-
-    if (fileSize > LimitAud) {
-      await conn.sendMessage(
-        m.chat,
-        {
-          document: isDirect ? audioData : {url: audioData},
-          mimetype: 'audio/mpeg',
-          fileName: `${yt_play?.[0]?.title || 'audio'}.mp3`
-        },
-        {quoted: m}
-      )
-    } else {
-      await conn.sendMessage(
-        m.chat,
-        {
-          audio: isDirect ? audioData : {url: audioData},
-          mimetype: 'audio/mpeg'
-        },
-        {quoted: m}
-      )
-    }
+    m.react?.('✅')
   } catch (e) {
-    console.log(`❌ Error ytmp3: ${e?.message || e}`)
-    await conn.reply(m.chat, `${lenguajeGB['smsMalError3']()}#report ${lenguajeGB['smsMensError2']()} ${usedPrefix + command}\n\n${wm}`, fkontak, m)
+    console.log('❌ Error spotify-combinado:', e?.message || e)
+    m.react?.('❌')
+    m.reply(`❌ Ocurrió un error al procesar tu solicitud.`)
   }
 }
 
-handler.command = /^audio|fgmp3|dlmp3|getaud|yt(a|mp3)$/i
-handler.register = true
+handler.command = ['spotify', 'music']
 export default handler
-
-async function search(query, options = {}) {
-  const search = await yts.search({query, hl: 'es', gl: 'ES', ...options})
-  return search.videos
-}
-
-async function getFileSize(url) {
-  try {
-    const res = await fetch(url, {method: 'HEAD'})
-    return parseInt(res.headers.get('content-length') || 0)
-  } catch {
-    return 0
-  }
-}
