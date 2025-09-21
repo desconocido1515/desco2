@@ -44,9 +44,9 @@ var handler = async (m, {conn, args, usedPrefix, command}) => {
 
   // Enviamos mensaje según la acción
   if (action === 'announcement') {
-    await conn.sendMessage(m.chat, 'ORDENES RECIBIDAS: GRUPO CERRADO', { quoted: m });
+    await conn.sendMessage(m.chat, { text: 'ORDENES RECIBIDAS: GRUPO CERRADO' }, { quoted: m });
   } else if (action === 'not_announcement') {
-    await conn.sendMessage(m.chat, 'ORDENES RECIBIDAS: GRUPO ABIERTO', { quoted: m });
+    await conn.sendMessage(m.chat, { text: 'ORDENES RECIBIDAS: GRUPO ABIERTO' }, { quoted: m });
   }
 }
 
