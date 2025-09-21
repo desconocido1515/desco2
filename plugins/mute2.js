@@ -1,31 +1,27 @@
 import fetch from 'node-fetch'
 
 const handler = async (m, { conn, command, text, isAdmin }) => {
-    if (!isAdmin) throw '👑 *Solo un administrador puede ejecutar este comando*'
+    if (!isAdmin) throw { text: '👑 *Solo un administrador puede ejecutar este comando*' }
 
     // Obtener el usuario objetivo
     let target = m.quoted?.sender || m.mentionedJid?.[0] || text
-    if (!target) return conn.sendMessage(m.chat, '❗ *Menciona a la persona que deseas mutear/desmutear*', m)
+    if (!target) return conn.sendMessage(m.chat, { text: '❗ *Menciona a la persona que deseas mutear/desmutear*' }, { quoted: m })
 
     // Validaciones
     const botOwner = global.owner?.[0]?.[0] + '@s.whatsapp.net'
-    if (target === botOwner) throw '😼 *El creador del bot no puede ser mutado*'
-    if (target === conn.user.jid) throw '❌ *No puedes mutar el bot*'
+    if (target === botOwner) throw { text: '😼 *El creador del bot no puede ser mutado*' }
+    if (target === conn.user.jid) throw { text: '❌ *No puedes mutar el bot*' }
 
     // Inicializar usuario en base de datos si no existe
     if (!global.db.data.users[target]) global.db.data.users[target] = { muted: false }
     let userData = global.db.data.users[target]
 
     if (command.toLowerCase() === 'mute') {
-        if (userData.muted) throw '😼 *Este usuario ya ha sido mutado*'
+        if (userData.muted) throw { text: '😼 *Este usuario ya ha sido mutado*' }
 
         // Mensaje de confirmación con imagen
         const msg = {
-            key: {
-                participants: '0@s.whatsapp.net',
-                fromMe: false,
-                id: 'mute-message'
-            },
+            key: { participants: '0@s.whatsapp.net', fromMe: false, id: 'mute-message' },
             message: {
                 locationMessage: {
                     name: 'Usuario mutado',
@@ -37,18 +33,14 @@ const handler = async (m, { conn, command, text, isAdmin }) => {
         }
 
         userData.muted = true
-        return conn.sendMessage(m.chat, '✅ *Usuario mutado correctamente*', msg, { mentions: [target] })
+        return conn.sendMessage(m.chat, { text: '✅ *Usuario mutado correctamente*' }, { quoted: m })
     }
 
     if (command.toLowerCase() === 'unmute') {
-        if (!userData.muted) throw '😼 *Este usuario no ha sido mutado*'
+        if (!userData.muted) throw { text: '😼 *Este usuario no ha sido mutado*' }
 
         const msg = {
-            key: {
-                participants: '0@s.whatsapp.net',
-                fromMe: false,
-                id: 'unmute-message'
-            },
+            key: { participants: '0@s.whatsapp.net', fromMe: false, id: 'unmute-message' },
             message: {
                 locationMessage: {
                     name: 'Usuario desmutado',
@@ -60,7 +52,7 @@ const handler = async (m, { conn, command, text, isAdmin }) => {
         }
 
         userData.muted = false
-        return conn.sendMessage(m.chat, '✅ *Usuario desmutado correctamente*', msg, { mentions: [target] })
+        return conn.sendMessage(m.chat, { text: '✅ *Usuario desmutado correctamente*' }, { quoted: m })
     }
 }
 
