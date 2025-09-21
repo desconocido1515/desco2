@@ -1,45 +1,37 @@
 let mutedUsers = new Set();
 
-let handler = async (m, { conn, usedPrefix, command, text, isAdmin, isBotAdmin }) => {
-    if (!isBotAdmin) return m.reply('⚠️ *El bot necesita ser admin*');
-    if (!isAdmin) return m.reply('⚠️ *Solo admins pueden usar este comando*');
+let handler = async (m, { conn, usedPrefix, command, isAdmin, isBotAdmin }) => {
+    if (!isBotAdmin) return conn.reply(m.chat, '⭐ El bot necesita ser administrador.', m);
+    if (!isAdmin) return conn.reply(m.chat, '⭐ Solo los administradores pueden usar este comando.', m);
 
-    let user = m.mentionedJid?.[0] || (m.quoted ? m.quoted.sender : null);
-    if (!user) throw `❌ *Menciona o responde al usuario*\nEjemplo: *${usedPrefix + command} @usuario*`;
+    let user;
+    if (m.quoted) {
+        user = m.quoted.sender;
+    } else {
+        return conn.reply(m.chat, '⭐ Responde al mensaje del usuario que quieres mutear.', m);
+    }
 
-    const isMute = command.toLowerCase() === 'mute';
-    const isUnmute = command.toLowerCase() === 'unmute';
-
-    if (isMute) {
+    if (command === "mute") {
         mutedUsers.add(user);
-        await conn.sendMessage(m.chat, {
-            text: `*ORDENES RECIBIDAS* ☑️\n\nSilenciaré a *@${user.split('@')[0]}*`,
-            mentions: [user]
-        }, { quoted: m });
-    } 
-    else if (isUnmute) {
+        conn.reply(m.chat, `✅ *Usuario muteado:* @${user.split('@')[0]}`, m, { mentions: [user] });
+    } else if (command === "unmute") {
         mutedUsers.delete(user);
-        await conn.sendMessage(m.chat, {
-            text: `*ORDENES RECIBIDAS* ☑️\n\n*@${user.split('@')[0]}* fuiste desmuteado.`,
-            mentions: [user]
-        }, { quoted: m });
+        conn.reply(m.chat, `✅ *Usuario desmuteado:* @${user.split('@')[0]}`, m, { mentions: [user] });
     }
 };
 
-// Anti-mensajes de usuarios muteados
 handler.before = async (m, { conn }) => {
-    if (mutedUsers.has(m.sender) && !m.key.fromMe) {
+    if (mutedUsers.has(m.sender) && m.mtype !== 'stickerMessage') {
         try {
-            await conn.sendMessage(m.chat, { delete: { remoteJid: m.chat, fromMe: false, id: m.key.id } });
+            await conn.sendMessage(m.chat, { delete: m.key });
         } catch (e) {
-            console.log(e);
+            console.error(e);
         }
-        return false; // Evita que otros handlers procesen el mensaje
     }
 };
 
-handler.help = ['mute @usuario', 'unmute @usuario'];
-handler.tags = ['moderación'];
+handler.help = ['mute', 'unmute'];
+handler.tags = ['group'];
 handler.command = /^(mute|unmute)$/i;
 handler.group = true;
 handler.admin = true;
