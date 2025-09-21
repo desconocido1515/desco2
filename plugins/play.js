@@ -1,33 +1,110 @@
+import fetch from 'node-fetch';
 import yts from 'yt-search';
-import ytdl from 'ytdl-core';
-import fs from 'fs';
-import path from 'path';
 
+// Lista de APIs para obtener enlaces de descarga de audio
+const APIS = [
+  {
+    name: 'Delirius API',
+    url: (videoUrl) => `https://delirius-apiofc.vercel.app/download/spotifydl?url=${encodeURIComponent(videoUrl)}`,
+    extract: (data) => data?.url || null
+  },
+  {
+    name: 'Zenkey API',
+    url: (videoUrl) => `https://api.zenkey.my.id/api/download/ytmp3?apikey=zenkey&url=${encodeURIComponent(videoUrl)}&quality=64`,
+    extract: (data) => data?.result?.download?.url
+  },
+  {
+    name: 'Yt1s API',
+    url: (videoUrl) => `https://yt1s.io/api/ajaxSearch?q=${encodeURIComponent(videoUrl)}`,
+    extract: async (data) => {
+      const k = data?.links?.mp3?.auto?.k;
+      return k ? `https://yt1s.io/api/ajaxConvert?vid=${data.vid}&k=${k}&quality=64` : null;
+    }
+  },
+  {
+    name: 'EasyApi YouTube MP3',
+    url: (videoUrl) => `https://api.apify.com/v2/acts/easyapi~youtube-video-and-mp3-downloader/runs?token=YOUR_API_TOKEN&url=${encodeURIComponent(videoUrl)}`,
+    extract: (data) => data?.data?.url || null
+  },
+  {
+    name: 'Transcript Downloader API',
+    url: (videoUrl) => `https://api.apify.com/v2/acts/transcriptdl~transcript-downloader-youtube-audio-scraper/runs?token=YOUR_API_TOKEN&url=${encodeURIComponent(videoUrl)}`,
+    extract: (data) => data?.data?.url || null
+  },
+  {
+    name: 'YTAudioConverterAPI',
+    url: (videoUrl) => `https://yt-audio-converter-api.herokuapp.com/convert?url=${encodeURIComponent(videoUrl)}`,
+    extract: (data) => data?.audio_url || null
+  },
+  {
+    name: 'YTDL API (Flask)',
+    url: (videoUrl) => `https://your-flask-api.com/download?url=${encodeURIComponent(videoUrl)}`,
+    extract: (data) => data?.download_url || null
+  },
+  {
+    name: 'RapidAPI YouTube to MP3',
+    url: (videoUrl) => `https://youtube-to-mp3.p.rapidapi.com/dl?url=${encodeURIComponent(videoUrl)}`,
+    extract: (data) => data?.url || null
+  },
+  {
+    name: 'Apify YouTube Audio Scraper',
+    url: (videoUrl) => `https://api.apify.com/v2/acts/transcriptdl~transcript-downloader-youtube-audio-scraper/runs?token=YOUR_API_TOKEN&url=${encodeURIComponent(videoUrl)}`,
+    extract: (data) => data?.data?.url || null
+  },
+  {
+    name: 'ClipGrab API',
+    url: (videoUrl) => `https://clipgrab.org/api/download?url=${encodeURIComponent(videoUrl)}`,
+    extract: (data) => data?.download_url || null
+  }
+];
+
+// Función para obtener el enlace de audio
+const getAudioUrl = async (videoUrl) => {
+  let lastError = null;
+  for (const api of APIS) {
+    try {
+      console.log(`Probando API: ${api.name}`);
+      const apiUrl = api.url(videoUrl);
+      const response = await fetch(apiUrl, { timeout: 5000 });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      const audioUrl = await api.extract(data);
+      if (audioUrl) {
+        console.log(`Éxito con API: ${api.name}`);
+        return audioUrl;
+      }
+    } catch (error) {
+      console.error(`Error con API ${api.name}:`, error.message);
+      lastError = error;
+      continue;
+    }
+  }
+  throw lastError || new Error('Todas las APIs fallaron');
+};
+
+// Función principal para manejar la solicitud
 const handler = async (m, { conn, text, usedPrefix, command }) => {
   if (!text || !text.trim()) {
-    throw `⭐ 𝘌𝘯𝘷𝘪𝘢 𝘦𝘭 𝘯𝘰𝘮𝘣𝘳𝘦 𝘥𝘦 𝘭𝗮 𝗰𝗮𝗻𝗰𝗶𝗼́𝗻\n\n» 𝘌𝘫𝗲𝗺𝗽𝗹𝗼: ${usedPrefix + command} Bad Bunny - Monaco`;
+    throw `⭐ 𝘌𝘯𝘷𝘪𝘢 𝘦𝘭 𝘯𝘰𝘮𝘣𝘳𝘦 𝘥𝘦 𝘭𝘢 𝘤𝘢𝘯𝘤𝘪ó𝘯\n\n» 𝘌𝘫𝘦𝘮𝘱𝘭𝘰: ${usedPrefix + command} Bad Bunny - Monaco`;
   }
 
   try {
-    await conn.sendMessage(m.chat, { react: { text: "🕒", key: m.key } });
+    await conn.sendMessage(m.chat, { react: { text: '🕒', key: m.key } });
 
-    // Buscar video en YouTube
     const searchResults = await yts({ query: text.trim(), hl: 'es', gl: 'ES' });
     const video = searchResults.videos[0];
-    if (!video) throw new Error("No se encontró ningún video");
+    if (!video) throw new Error('No se encontró el video');
 
-    // Limitar duración (máx 10 min)
-    if (video.seconds > 600) throw "❌ El audio es muy largo (máx 10 minutos)";
-
-    // Info del video
-    const infoText = `🪼 *Título:* ${video.title}\n🪩 *Canal:* ${video.author.name}\n⏳ *Duración:* ${video.timestamp}\n🔗 *Enlace:* ${video.url}`;
+    if (video.seconds > 600) {
+      throw '❌ El audio es muy largo (máximo 10 minutos)';
+    }
 
     await conn.sendMessage(m.chat, {
-      text: infoText,
+      text: `01:27 ━━━━━⬤────── 05:48\n*⇄ㅤ      ◁        ❚❚        ▷        ↻*\n╴𝗘𝗹𝗶𝘁𝗲 𝗕𝗼𝘁 𝗚𝗹𝗼𝗯𝗮𝗹`,
       contextInfo: {
         externalAdReply: {
           title: video.title.slice(0, 60),
-          body: video.author.name,
+          body: '',
           thumbnailUrl: video.thumbnail,
           mediaType: 1,
           renderLargerThumbnail: true,
@@ -37,45 +114,36 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
       }
     }, { quoted: m });
 
-    // Descargar audio con ytdl-core
-    const tempFile = path.join('/tmp', `${video.videoId}.mp3`);
-    const stream = ytdl(video.url, { filter: 'audioonly', quality: 'highestaudio' });
-    
-    await new Promise((resolve, reject) => {
-      const writeStream = fs.createWriteStream(tempFile);
-      stream.pipe(writeStream);
-      writeStream.on('finish', resolve);
-      writeStream.on('error', reject);
-    });
+    let audioUrl;
+    try {
+      audioUrl = await getAudioUrl(video.url);
+    } catch (e) {
+      console.error('Error al obtener audio:', e);
+      throw '⚠️ Error al procesar el audio. Intenta con otra canción';
+    }
 
-    // Enviar audio
     await conn.sendMessage(m.chat, {
-      audio: { url: tempFile },
+      audio: { url: audioUrl },
       mimetype: 'audio/mpeg',
       fileName: `${video.title.slice(0, 30)}.mp3`.replace(/[^\w\s.-]/gi, ''),
       ptt: false
     }, { quoted: m });
 
-    // Eliminar archivo temporal
-    fs.unlink(tempFile, (err) => err && console.error('Error al borrar temp:', err));
-
-    await conn.sendMessage(m.chat, { react: { text: "✅", key: m.key } });
+    await conn.sendMessage(m.chat, { react: { text: '✅', key: m.key } });
 
   } catch (error) {
-    console.error("Error handler YouTube:", error?.message || error);
-    await conn.sendMessage(m.chat, { react: { text: "❌", key: m.key } });
-
+    console.error('Error:', error);
+    await conn.sendMessage(m.chat, { react: { text: '❌', key: m.key } });
     const errorMsg = typeof error === 'string' ? error :
       `❌ *Error:* ${error.message || 'Ocurrió un problema'}\n\n` +
       `🔸 *Posibles soluciones:*\n` +
       `• Verifica el nombre de la canción\n` +
       `• Intenta con otro tema\n` +
       `• Prueba más tarde`;
-
     await conn.sendMessage(m.chat, { text: errorMsg }, { quoted: m });
   }
 };
 
-handler.command = ['play', 'playaudio', 'ytmusic', 'youtube'];
+handler.command = ['play', 'playaudio', 'ytmusic'];
 handler.exp = 0;
 export default handler;
