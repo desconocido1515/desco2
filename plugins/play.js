@@ -1,5 +1,4 @@
 import axios from 'axios';
-import yts from 'yt-search';
 
 const SEARCH_API = 'https://delirius-apiofc.vercel.app/search/spotify?q=';
 const DL_API = 'https://delirius-apiofc.vercel.app/download/spotifydl?url=';
@@ -10,36 +9,37 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
   }
 
   try {
+    // Reacción inicial
     await conn.sendMessage(m.chat, { react: { text: "🕒", key: m.key } });
 
-    // Buscar video con yt-search (opcional para info rápida)
-    const searchResults = await yts({ query: text.trim(), hl: 'es', gl: 'ES' });
-    const video = searchResults.videos[0] || {};
-    
+    // Detectar si es URL de Spotify
     const isSpotifyUrl = /https?:\/\/open\.spotify\.com\/(track|album|playlist|episode)\/[A-Za-z0-9]+/i.test(text);
     let trackUrl = text.trim();
     let picked = null;
 
+    // Si no es URL, buscar en Delirius
     if (!isSpotifyUrl) {
-      // Buscar canción en Delirius API
       const { data: sRes } = await axios.get(`${SEARCH_API}${encodeURIComponent(text.trim())}`, { timeout: 25000 });
-      if (!sRes?.status || !Array.isArray(sRes?.data) || sRes.data.length === 0) throw new Error('No se encontraron resultados.');
+      if (!sRes?.status || !Array.isArray(sRes?.data) || sRes.data.length === 0) throw new Error('No se encontraron resultados para tu búsqueda.');
       picked = sRes.data[0];
       trackUrl = picked.url;
     }
+
+    console.log("Track URL:", trackUrl); // Depuración para evitar undefined
 
     // Descargar audio
     const { data: dRes } = await axios.get(`${DL_API}${encodeURIComponent(trackUrl)}`, { timeout: 25000 });
     if (!dRes?.status || !dRes?.data?.url) throw new Error('No se pudo obtener el enlace de descarga.');
 
     const {
-      title = picked?.title || video.title || 'Desconocido',
+      title = picked?.title || 'Desconocido',
       author = picked?.artist || 'Desconocido',
-      image = picked?.image || video.thumbnail || '',
-      duration = picked?.duration || video.seconds * 1000 || 0,
+      image = picked?.image || '',
+      duration = picked?.duration || 0,
       url: download
     } = dRes.data || {};
 
+    // Formatear duración a mm:ss
     const toMMSS = (ms) => {
       const totalSec = Math.floor((+ms || 0) / 1000);
       const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
@@ -48,9 +48,9 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
     };
     const mmss = duration ? toMMSS(duration) : '—:—';
 
-    // Mensaje con info del audio
+    // Enviar info del audio
     await conn.sendMessage(m.chat, {
-      text: `01:27 ━━━━━⬤────── 05:48\n*⇄ㅤ      ◁        ❚❚        ▷        ↻*\n╴𝗘𝗹𝗶𝘁𝗲 𝗕𝗼𝘁 𝗚𝗹𝗼𝗯𝗮𝗹\n\n🪼 *Título:* ${title}\n🪩 *Artista:* ${author}\n⏳ *Duración:* ${mmss}\n🔗 *Enlace:* ${trackUrl}`,
+      text: `🪼 *Título:* ${title}\n🪩 *Artista:* ${author}\n⏳ *Duración:* ${mmss}\n🔗 *Enlace:* ${trackUrl}`,
       contextInfo: {
         externalAdReply: {
           title: title.slice(0, 60),
@@ -72,10 +72,11 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
       ptt: false
     }, { quoted: m });
 
+    // Reacción de éxito
     await conn.sendMessage(m.chat, { react: { text: "✅", key: m.key } });
 
   } catch (error) {
-    console.error("Error:", error?.message || error);
+    console.error("Error handler música:", error?.message || error);
     await conn.sendMessage(m.chat, { react: { text: "❌", key: m.key } });
 
     const errorMsg = typeof error === 'string' ? error :
