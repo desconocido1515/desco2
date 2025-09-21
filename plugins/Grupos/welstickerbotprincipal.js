@@ -8,7 +8,7 @@ handler.before = async function (m, { conn }) {
   let chat = global.db.data.chats[m.chat]
   if (!chat?.welcome) return  // Verifica si welcome está activado
 
-  const MAIN_BOT_NUMBER = '593986304370'
+  const MAIN_BOT_NUMBER = '593959158585'
   const currentBotNumber = conn.user.jid.split('@')[0]
   if (currentBotNumber !== MAIN_BOT_NUMBER) return
 
