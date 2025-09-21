@@ -4,51 +4,32 @@ import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 
-// Función para obtener audio de YouTube
-const YT_APIS = [
-  {
-    name: 'ytdl-core',
-    getAudio: async (url) => {
-      const tempFile = path.join('/tmp', `${Date.now()}.mp3`);
-      const stream = ytdl(url, { filter: 'audioonly', quality: 'highestaudio' });
-      await new Promise((resolve, reject) => {
-        const writeStream = fs.createWriteStream(tempFile);
-        stream.pipe(writeStream);
-        writeStream.on('finish', resolve);
-        writeStream.on('error', reject);
-      });
-      return tempFile;
-    }
-  },
-  {
-    name: 'Delirius API',
-    getAudio: async (url) => {
-      const apiUrl = `https://delirius-apiofc.vercel.app/download/spotifydl?url=${encodeURIComponent(url)}`;
-      const { data } = await axios.get(apiUrl, { timeout: 15000 });
-      if (!data?.url) throw new Error('Delirius API falló');
-      return data.url;
-    }
-  }
-];
+// Capturar errores globales para que el bot no se caiga
+process.on('unhandledRejection', (reason, promise) => {
+  console.warn('⚠️ Unhandled Rejection capturado:', reason);
+});
 
-// Función para probar APIs en orden
+// Función para obtener audio
 const getAudioUrl = async (videoUrl) => {
-  let lastError = null;
-  for (const api of YT_APIS) {
-    try {
-      console.log(`Probando API: ${api.name}`);
-      const audioUrl = await api.getAudio(videoUrl);
-      if (audioUrl) {
-        console.log(`✅ Éxito con API: ${api.name}`);
-        return audioUrl;
-      }
-    } catch (err) {
-      console.warn(`⚠️ Error con API ${api.name}:`, err.message || err);
-      lastError = err;
-      continue;
-    }
+  try {
+    // Intentar ytdl-core
+    const tempFile = path.join('/tmp', `${Date.now()}.mp3`);
+    const stream = ytdl(videoUrl, { filter: 'audioonly', quality: 'highestaudio' });
+    await new Promise((resolve, reject) => {
+      const writeStream = fs.createWriteStream(tempFile);
+      stream.pipe(writeStream);
+      writeStream.on('finish', resolve);
+      writeStream.on('error', reject);
+    });
+    return { audioUrl: tempFile, api: 'ytdl-core' };
+  } catch (err) {
+    console.warn(`⚠️ ytdl-core falló: ${err.message}, usando Delirius API`);
+    // Respaldo con Delirius API
+    const apiUrl = `https://delirius-apiofc.vercel.app/download/spotifydl?url=${encodeURIComponent(videoUrl)}`;
+    const { data } = await axios.get(apiUrl, { timeout: 15000 });
+    if (!data?.url) throw new Error('Delirius API falló');
+    return { audioUrl: data.url, api: 'Delirius API' };
   }
-  throw lastError || new Error("Todas las APIs fallaron");
 };
 
 // Handler principal
@@ -67,7 +48,8 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
     if (video.seconds > 600) throw "❌ El audio es muy largo (máx 10 minutos)";
 
     // Obtener audio
-    const audioUrl = await getAudioUrl(video.url);
+    const { audioUrl, api } = await getAudioUrl(video.url);
+    console.log(`Audio obtenido usando: ${api}`);
 
     // Enviar info del video
     await conn.sendMessage(m.chat, {
@@ -93,7 +75,7 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
     await conn.sendMessage(m.chat, audioMessage, { quoted: m });
 
     // Eliminar archivo temporal si existe
-    if (fs.existsSync(audioUrl)) fs.unlink(audioUrl, () => {});
+    if (fs.existsSync(audioUrl) && api === 'ytdl-core') fs.unlink(audioUrl, () => {});
 
     await conn.sendMessage(m.chat, { react: { text: "✅", key: m.key } });
 
