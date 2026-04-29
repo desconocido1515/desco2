@@ -24,7 +24,7 @@ handler.before = async function (m, { conn }) {
                 }
             ]
             
-            const imagePath = './src/1x1.jpg'
+            const imagePath = './src/agenda.jpg'
             const texto = `*¡JA! ${nombre} TE ENTERRASTE TU MISMO!* 😈\n\n*A ver, ¿quién pone la sala o solo sabes chupar experiencia?* 🍼\n\n*¿Pones sala o que?* 🐭`
             
             await conn.sendMessage(m.chat, {
