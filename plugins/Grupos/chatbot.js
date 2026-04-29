@@ -1,4 +1,4 @@
-import fetch from 'node-fetch';
+/*import fetch from 'node-fetch';
 
 let handler = async (m, { text, conn }) => {
   // Detectar si el mensaje menciona al bot o usa comandos
@@ -13,7 +13,7 @@ let handler = async (m, { text, conn }) => {
     .replace(/^[\.]?(bot|gemini)\s*/i, '') // Elimina comandos
     .trim();
 
-  if (!query) throw `¡Hola!\nMi nombre es Elite Bot\n¿En qué te puedo ayudar? ♥️`;
+/*  if (!query) throw `¡Hola!\nMi nombre es Elite Bot\n¿En qué te puedo ayudar? ♥️`;
 
   try {
     await conn.sendPresenceUpdate('composing', m.chat);
@@ -33,3 +33,4 @@ handler.customPrefix = /^(\.?bot|\.?gemini|@\d+)/i;
 handler.command = new RegExp;
 handler.tags = ['ai'];
 export default handler;
+*/
