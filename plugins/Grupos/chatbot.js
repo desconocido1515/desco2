@@ -12,7 +12,7 @@ let handler = async (m, { text, conn }) => {
     .replace(new RegExp(`@${conn.user.jid.split('@')[0]}`, 'i'), '') // Elimina @EliteBot
     .replace(/^[\.]?(bot|gemini)\s*/i, '') // Elimina comandos
     .trim();
-
+*/
 /*  if (!query) throw `¡Hola!\nMi nombre es Elite Bot\n¿En qué te puedo ayudar? ♥️`;
 
   try {
