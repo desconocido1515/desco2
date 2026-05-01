@@ -372,7 +372,7 @@ userDevicesCache: userDevicesCache || new Map(),
 //msgRetryCounterMap,
 defaultQueryTimeoutMs: undefined,
 cachedGroupMetadata: (jid) => global.conn.chats[jid] ?? {},
-version: [2, 3000, 1033959288],
+version: version, 
 keepAliveIntervalMs: 55000, 
 maxIdleTimeMs: 60000, 
 };
