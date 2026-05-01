@@ -8,9 +8,11 @@ const yt = {
       'accept-encoding': 'gzip, deflate, br, zstd',
       'origin': 'https://frame.y2meta-uk.com',
       'user-agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36'
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
     }
   }),
+
+  key: null,
 
   resolvePayload(link, f) {
     const tipo = f.endsWith('k') ? 'mp3' : 'mp4';
@@ -29,12 +31,16 @@ const yt = {
   },
 
   async getKey() {
+    if (this.key) return this.key;
+
     const r = await fetch(this.static.baseUrl + '/v2/sanity/key', {
       headers: this.static.headers
     });
 
     const j = await r.json();
     if (!j?.key) throw new Error('Key inválida');
+
+    this.key = j.key;
     return j.key;
   },
 
@@ -49,88 +55,156 @@ const yt = {
     });
 
     const j = await r.json();
-    if (!j?.url) throw new Error('No se pudo convertir');
+
+    if (!j?.url || !j.url.startsWith('http')) {
+      throw new Error('cnv sin enlace válido');
+    }
+
     return j;
   }
 };
 
+// ==================== APIS ====================
+
+// GOHAN
+const gohanDownload = async (url) => {
+  const api = `https://api-gohan.onrender.com/download/ytaudio?url=${encodeURIComponent(url)}`;
+  const r = await fetch(api);
+  const j = await r.json();
+
+  if (!j?.result?.download_url) throw new Error('Gohan falló');
+
+  return {
+    url: j.result.download_url,
+    filename: j.result.title
+  };
+};
+
+// DELIRIUS
+const deliriusDownload = async (url) => {
+  const api = `https://api.delirius.store/download/ytmp3?url=${encodeURIComponent(url)}`;
+  const r = await fetch(api);
+  const j = await r.json();
+
+  if (!j?.status || !j?.data?.download) throw new Error('Delirius falló');
+
+  return {
+    url: j.data.download,
+    filename: j.data.title
+  };
+};
+
+// CNV
+const cnvDownload = async (url, title) => {
+  const data = await yt.convert(url, '128k');
+
+  const r = await fetch(data.url, {
+    headers: { 'user-agent': 'Mozilla/5.0' }
+  });
+
+  if (!r.ok) throw new Error('cnv HTTP error');
+
+  const buffer = Buffer.from(await r.arrayBuffer());
+
+  return {
+    audioData: buffer,
+    fileName: yt.sanitize(data.filename || title)
+  };
+};
+
+// ==================== RACE ====================
+const descargarMasRapido = async (url, title) => {
+  const apis = [
+    { name: 'cnv', fn: () => cnvDownload(url, title) },
+    { name: 'gohan', fn: () => gohanDownload(url) },
+    { name: 'delirius', fn: () => deliriusDownload(url) }
+  ];
+
+  const race = await Promise.race(
+    apis.map(async (api) => {
+      const start = Date.now();
+      try {
+        const res = await api.fn();
+        return { ok: true, res, api: api.name, time: Date.now() - start };
+      } catch {
+        return { ok: false };
+      }
+    })
+  );
+
+  if (race.ok) {
+    console.log(`⚡ ${race.api} ganó (${race.time}ms)`);
+    return race.res;
+  }
+
+  // fallback
+  for (const api of apis) {
+    try {
+      return await api.fn();
+    } catch {}
+  }
+
+  throw new Error('Todas las APIs fallaron');
+};
+
+// ==================== HANDLER ====================
 const handler = async (m, { conn, text, usedPrefix, command }) => {
-  if (!text || !text.trim()) {
-    throw `⭐ 𝘌𝘯𝘷𝘪𝘢 𝘦𝘭 𝘯𝘰𝘮𝘣𝘳𝘦 𝘥𝘦 𝘭𝘢 𝘤𝘢𝘯𝘤𝘪ó𝘯\n\n» 𝘌𝘫𝘦𝘮𝘱𝘭𝘰: ${usedPrefix + command} Bad Bunny - Monaco`;
+  if (!text) {
+    throw `⭐ Envía el nombre de la canción\n\nEjemplo:\n${usedPrefix + command} Bad Bunny - Monaco`;
   }
 
   try {
     await conn.sendMessage(m.chat, { react: { text: "🕒", key: m.key } });
 
-    const searchResults = await yts({ query: text.trim(), hl: 'es', gl: 'ES' });
-    const video = searchResults.videos[0];
-    if (!video) throw new Error("No se encontró el video");
+    const search = await yts(text.trim());
+    const video = search.videos[0];
 
-    if (video.seconds > 600) {
-      throw "❌ El audio es muy largo (máximo 10 minutos)";
-    }
+    if (!video) throw "No se encontró el video";
+    if (video.seconds > 600) throw "❌ Máximo 10 minutos";
 
+    // preview
     await conn.sendMessage(m.chat, {
-      text: `01:27 ━━━━━⬤────── 05:48\n*⇄ㅤ      ◁        ❚❚        ▷        ↻*\n╴𝗘𝗹𝗶𝘁𝗲 𝗕𝗼𝘁 𝗚𝗹𝗼𝗯𝗮𝗹`,
+      text: `▶️ *${video.title}*`,
       contextInfo: {
         externalAdReply: {
-          title: video.title.slice(0, 60),
-          body: "",
+          title: video.title,
           thumbnailUrl: video.thumbnail,
+          sourceUrl: video.url,
           mediaType: 1,
-          renderLargerThumbnail: true,
-          showAdAttribution: true,
-          sourceUrl: video.url
+          renderLargerThumbnail: true
         }
       }
     }, { quoted: m });
 
-    // EXACTAMENTE como el primer código que sí funcionaba
-    const formato = '128k';
-    const data = await yt.convert(video.url, formato);
+    const result = await descargarMasRapido(video.url, video.title);
 
-    const fileName = yt.sanitize(data.filename || video.title);
+    let buffer, name;
 
-    const r = await fetch(data.url, {
-      headers: {
-        'user-agent': 'Mozilla/5.0'
-      }
-    });
+    if (result.audioData) {
+      buffer = result.audioData;
+      name = result.fileName;
+    } else {
+      const r = await fetch(result.url);
+      buffer = Buffer.from(await r.arrayBuffer());
+      name = yt.sanitize(result.filename || video.title);
+    }
 
-    if (!r.ok) throw new Error(`Error al descargar audio: HTTP ${r.status}`);
-
-    const buffer = Buffer.from(await r.arrayBuffer());
-
-    await conn.sendMessage(
-      m.chat,
-      {
-        audio: buffer,
-        mimetype: 'audio/mpeg',
-        fileName: `${fileName}.mp3`,
-        ptt: false
-      },
-      { quoted: m }
-    );
+    await conn.sendMessage(m.chat, {
+      audio: buffer,
+      mimetype: 'audio/mpeg',
+      fileName: `${name}.mp3`
+    }, { quoted: m });
 
     await conn.sendMessage(m.chat, { react: { text: "✅", key: m.key } });
 
-  } catch (error) {
-    console.error("Error real en play:", error);
+  } catch (e) {
+    console.error(e);
 
     await conn.sendMessage(m.chat, { react: { text: "❌", key: m.key } });
 
-    const errorMsg = typeof error === 'string'
-      ? error
-      : `❌ *Error:* ${error.message || 'Ocurrió un problema'}\n\n` +
-        `🔸 *Posibles soluciones:*\n` +
-        `• Verifica el nombre de la canción\n` +
-        `• Intenta con otro tema\n` +
-        `• Prueba más tarde`;
-
-    await conn.sendMessage(m.chat, { text: errorMsg }, { quoted: m });
+    throw `❌ Error:\n${e.message || e}`;
   }
 };
 
 handler.command = ['play', 'playaudio', 'ytmusic'];
-handler.exp = 0;
 export default handler;
