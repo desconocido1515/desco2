@@ -1,4 +1,4 @@
-import pkg from '@whiskeysockets/baileys';
+/*import pkg from '@whiskeysockets/baileys';
 const { generateWAMessageFromContent, proto } = pkg;
 
 let handler = async (m, { conn }) => {
@@ -123,3 +123,4 @@ handler.command = new RegExp;
 handler.group = true;
 
 export default handler;
+*/
